@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USERS & AUTH ============
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          Role      @default(ADVERTISER)
+  company       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  advertisers   Advertiser[]
+  websites      Website[]
+  apiKeys       ApiKey[]
+  sessions      Session[]
+}
+
+enum Role {
+  ADMIN
+  ADVERTISER
+  PUBLISHER
+  AGENCY
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  lastUsed  DateTime?
+}
+
+// ============ ADVERTISERS (Revive concept) ============
+model Advertiser {
+  id          String     @id @default(cuid())
+  name        String
+  contactEmail String?
+  status      Status     @default(ACTIVE)
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id])
+  campaigns   Campaign[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ============ CAMPAIGNS (Contract / Remnant / Override like Revive) ============
+model Campaign {
+  id              String       @id @default(cuid())
+  name            String
+  advertiserId    String
+  advertiser      Advertiser   @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  type            CampaignType @default(CONTRACT)
+  status          CampaignStatus @default(DRAFT)
+  objective       String?
+  budgetTotal     Float?
+  budgetDaily     Float?
+  spent           Float        @default(0)
+  startDate       DateTime?
+  endDate         DateTime?
+  priority        Int          @default(5)
+  weight          Int          @default(1)
+  frequencyCap    Int?
+  frequencyPeriod String?
+  targeting       String?
+  platforms       String?
+  metaCampaignId  String?
+  tiktokCampaignId String?
+  creatives       Creative[]
+  zones           CampaignZone[]
+  stats           StatDaily[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum CampaignType {
+  CONTRACT
+  REMNANT
+  OVERRIDE
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum Status {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+// ============ CREATIVES / BANNERS ============
+model Creative {
+  id            String       @id @default(cuid())
+  name          String
+  campaignId    String
+  campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type          CreativeType @default(IMAGE)
+  status        Status       @default(ACTIVE)
+  width         Int?
+  height        Int?
+  imageUrl      String?
+  htmlContent   String?
+  thirdPartyTag String?
+  clickUrl      String?
+  weight        Int          @default(1)
+  impressions   Int          @default(0)
+  clicks        Int          @default(0)
+  metaAdId      String?
+  tiktokAdId    String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+enum CreativeType {
+  IMAGE
+  HTML5
+  VIDEO
+  NATIVE
+  THIRD_PARTY
+}
+
+// ============ WEBSITES & ZONES (Inventory) ============
+model Website {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  status      Status   @default(ACTIVE)
+  zones       Zone[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Zone {
+  id            String         @id @default(cuid())
+  name          String
+  websiteId     String
+  website       Website        @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  width         Int
+  height        Int
+  type          ZoneType       @default(BANNER)
+  status        Status         @default(ACTIVE)
+  invocationCode String?
+  campaigns     CampaignZone[]
+  stats         StatDaily[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum ZoneType {
+  BANNER
+  INTERSTITIAL
+  NATIVE
+  VIDEO
+  POPUNDER
+}
+
+model CampaignZone {
+  id         String   @id @default(cuid())
+  campaignId String
+  zoneId     String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  zone       Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, zoneId])
+}
+
+// ============ STATS ============
+model StatDaily {
+  id           String   @id @default(cuid())
+  date         DateTime
+  campaignId   String?
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  zoneId       String?
+  zone         Zone?     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  requests     Int       @default(0)
+  impressions  Int       @default(0)
+  clicks       Int       @default(0)
+  conversions  Int       @default(0)
+  revenue      Float     @default(0)
+  spend        Float     @default(0)
+
+  @@unique([date, campaignId, zoneId])
+  @@index([date])
+}
+
+// ============ PLATFORM INTEGRATIONS ============
+model Integration {
+  id            String   @id @default(cuid())
+  platform      Platform
+  accessToken   String?
+  refreshToken  String?
+  expiresAt     DateTime?
+  accountId     String?
+  accountName   String?
+  isActive      Boolean  @default(false)
+  metadata      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum Platform {
+  META
+  TIKTOK
+  GOOGLE
+}
+
+// ============ PRICING / BILLING (Cheap rates) ============
+model PricingPlan {
+  id          String   @id @default(cuid())
+  name        String
+  platformFee Float
+  cpmRate     Float?
+  cpcRate     Float?
+  monthlyFee  Float    @default(0)
+  isDefault   Boolean  @default(false)
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  status      String   @default("pending")
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime @default(now())
+}
